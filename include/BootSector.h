@@ -3,7 +3,6 @@
 #ifndef BOOTSECTOR_H
 #define BOOTSECTOR_H
 
-#include <cstdint>
 #include <stdint.h>
 #include <string.h>
 
@@ -56,6 +55,34 @@ typedef struct {
 int fat32_parse_boot_sector(
     BootSector* bootSector,
     const uint8_t* sector
+);
+
+int fat32_validate_boot_sector(
+    BootSector* bootSector
+);
+
+uint16_t fat32_get_offset(
+    BootSector* bootSector
+);
+
+uint32_t fat32_get_size(
+    BootSector* bootSector
+);
+
+uint16_t root_dir_get_offset(
+    BootSector* bootSector
+);
+
+uint32_t root_dir_get_size(
+    BootSector* bootSector
+);
+
+uint32_t data_get_offset(
+    BootSector* bootSector
+);
+
+uint32_t data_get_size(
+    BootSector* bootSector
 );
 
 #endif

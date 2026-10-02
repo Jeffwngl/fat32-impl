@@ -1,4 +1,4 @@
-#include "../include/BootSector.h"
+#include "BootSector.h"
 #include <stdint.h>
 
 // little endian helpers - reconstruct int from little endian bytes
@@ -99,4 +99,112 @@ int fat32_parse_boot_sector(
     bootSector->BS_Sign = read_le16(&sector[510]);
 
     return 0;
+}
+
+int fat32_validate_boot_sector(
+    BootSector* bootSector
+) {
+    if (bootSector == NULL) {
+        return -1;
+    }
+
+    if (bootSector->BS_Sign != 0xAA55) {
+        return -1;
+    }
+    
+    /*
+    Microsoft supports 512, 1024, 2048 or 4096 bytes, however,
+    some FAT drivers assume it to be 512, 512 is used here to
+    maximize compatibility.
+    */
+    if (bootSector->BPB_BytesPerSec != 512) {
+        return -1;
+    }
+    
+    /*
+    sectors per cluster must be non zero and in factors of 2
+    x & (x - 1) becomes zero for powers of 2.
+    credit to:
+    https://stackoverflow.com/questions/600293/how-to-check-if-a-number-is-a-power-of-2
+    */
+    if (bootSector->BPB_SecPerClus == 0 
+            || (bootSector->BPB_SecPerClus & (bootSector->BPB_SecPerClus - 1) != 0)) {
+        return -1;
+    }
+
+    if (bootSector->BPB_ReservedSecCnt == 0) {
+        return -1;
+    }
+
+    if (bootSector->BPB_NumFATs == 0) {
+        return -1;
+    }
+    // FAT32 specific requirements
+    if (bootSector->BPB_RootEntCnt != 0) {
+        return -1;
+    }
+
+    if (bootSector->BPB_TotalSec16 != 0) {
+        return -1;
+    }
+
+    if (bootSector->BPB_FATSz16 != 0) {
+        return -1;
+    }
+
+    if (bootSector->BPB_FATSz32 == 0) {
+        return -1;
+    }
+
+    if (bootSector->BPB_TotalSec32 == 0) {
+        return -1;
+    }
+
+    if (bootSector->BPB_RootClus < 2) {
+        return -1;
+    }
+
+    
+
+    return 0;
+}
+
+uint16_t fat32_get_offset(
+    BootSector* bootSector
+) {
+    return bootSector->BPB_ReservedSecCnt;
+}
+
+uint32_t fat32_get_size(
+    BootSector* bootSector
+) {
+    return bootSector->BPB_FATSz32 * bootSector->BPB_NumFATs;
+}
+
+uint16_t root_dir_get_offset(
+    BootSector* bootSector
+) {
+    return (uint32_t)fat32_get_offset(bootSector) + fat32_get_size(bootSector);
+}
+
+uint32_t root_dir_get_size(
+    BootSector* bootSector
+) {
+    return (
+        32 * bootSector->BPB_RootEntCnt
+        + bootSector->BPB_BytesPerSec - 1
+        )
+        / bootSector->BPB_BytesPerSec;
+}
+
+uint32_t data_get_offset(
+    BootSector* bootSector
+) {
+    return root_dir_get_offset(bootSector) + root_dir_get_size(bootSector);
+}
+
+uint32_t data_get_size(
+    BootSector* bootSector
+) {
+    return bootSector->BPB_TotalSec32 - data_get_offset(bootSector);
 }
