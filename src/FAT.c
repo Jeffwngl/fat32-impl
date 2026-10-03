@@ -4,10 +4,11 @@
 #include <stdlib.h>
 
 #include "BootSector.h"
+#include "Disk.h"
 #include "Helper.h"
 
 int init_FAT(
-    FAT* fat, 
+    FAT* fat,
     BootSector *bootSector
 ) {
     fat->fat_start_sector = fat32_get_start_sector(bootSector);
@@ -16,6 +17,15 @@ int init_FAT(
     fat->sectors_per_cluster = bootSector->BPB_SecPerClus;
     fat->root = bootSector->BPB_RootClus;
 
+    return 0;
+}
+
+int check_FAT(
+    FAT* fat,
+    BootSector* bootSector,
+    Disk* disk
+) {
+    
     return 0;
 }
 
@@ -36,6 +46,50 @@ enum FAT_Type get_FAT_type(
     }
 }
 
+int fat32_initialize_fat_table(
+    Disk* disk,
+    FAT* fat,
+    BootSector* bootSector
+) {
+    uint32_t bytesPerSec = bootSector->BPB_BytesPerSec;
+    uint8_t* buffer = malloc(bytesPerSec);
+
+    if (buffer == NULL) {
+        return -1;
+    }
+
+    if (disk_read_sector(
+        disk->file,
+        fat->fat_start_sector,
+        bytesPerSec,
+        buffer
+    ) != 0) {
+        free(buffer);
+        return -1;
+    }
+
+    uint32_t fat0 = 0x0FFFFF00 | bootSector->BPB_Media;
+    uint32_t fat1 = 0x0FFFFFFF;
+    
+    write_le32(buffer, fat0);
+    // each FAT32 entry is 4 bytes
+    write_le32(&buffer[4], fat1);
+
+    if (disk_write_sector(
+        disk->file,
+        fat->fat_start_sector,
+        bytesPerSec,
+        buffer
+    ) != 0) {
+        free(buffer);
+        return -1;
+    } 
+
+    free(buffer);
+    
+    return 0;
+}
+
 // returns specific byte position inside the FAT where entry for a cluster is stored
 uint32_t fat32_get_entry_sector(
     BootSector* bootSector,
@@ -51,20 +105,30 @@ uint32_t fat32_get_entry_offset(
     return (N * 4) % bootSector->BPB_BytesPerSec;
 }
 
-/*
-the FAT entry of a FAT32 volume occupies 32 bits, but it's upper 4 bits are reserved, only the lower 28 bits are valid, these upper bits are initialized to 0.
-*/
+
+// the FAT entry of a FAT32 volume occupies 32 bits, but it's upper 4 bits are reserved, 
+// only the lower 28 bits are valid, these upper bits are initialized to 0.
+// bit 31 is the volume dirty flag, this is cleared on boot and restored on clean shutdown.
+// An already cleared on boot case indicates that it has had a dirty shutdown and there is a error in the volume.
+// bit 30 is cleared on unrecoverable read or write errors to indicate that surface inspection is needed.
 int fat32_load_value(
     Disk* disk,
     BootSector* bootSector,
     uint32_t N
 ) {
-    uint32_t fatSector = fat32_get_entry_sector(bootSector, N); 
     uint32_t fatOffset = fat32_get_entry_offset(bootSector, N);
     uint32_t bytesPerSec = bootSector->BPB_BytesPerSec;
     uint8_t* buffer = malloc(bytesPerSec);
 
-    disk_read_sector(disk->file, fatSector + fatOffset, bytesPerSec, buffer);
+    if (disk_read_sector(
+        disk->file, 
+        fatOffset, 
+        bytesPerSec, 
+        buffer
+    ) != 0) {
+        free(buffer);
+        return -1;
+    }
 
     uint32_t val = read_le32(buffer);
 

@@ -35,7 +35,19 @@ int init_FAT(
     BootSector* bootSector
 );
 
+int check_FAT(
+    FAT* fat,
+    BootSector* bootSector,
+    Disk* disk
+);
+
 enum FAT_Type get_FAT_type(
+    BootSector* bootSector
+);
+
+int fat32_initialize_fat_table(
+    Disk* disk,
+    FAT* fat,
     BootSector* bootSector
 );
 
