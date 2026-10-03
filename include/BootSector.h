@@ -58,31 +58,31 @@ int fat32_parse_boot_sector(
 );
 
 int fat32_validate_boot_sector(
-    BootSector* bootSector
+    const BootSector* bootSector
 );
 
-uint16_t fat32_get_offset(
-    BootSector* bootSector
+uint32_t fat32_get_start_sector(
+    const BootSector* bootSector
 );
 
-uint32_t fat32_get_size(
-    BootSector* bootSector
+uint32_t fat32_region_get_size(
+    const BootSector* bootSector
 );
 
-uint16_t root_dir_get_offset(
-    BootSector* bootSector
+uint32_t root_dir_get_start_sector(
+    const BootSector* bootSector
 );
 
 uint32_t root_dir_get_size(
-    BootSector* bootSector
+    const BootSector* bootSector
 );
 
-uint32_t data_get_offset(
-    BootSector* bootSector
+uint32_t data_get_start_sector(
+    const BootSector* bootSector
 );
 
 uint32_t data_get_size(
-    BootSector* bootSector
+    const BootSector* bootSector
 );
 
 #endif

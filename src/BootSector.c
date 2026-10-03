@@ -1,30 +1,9 @@
 #include "BootSector.h"
+
 #include <stdint.h>
+#include <string.h>
 
-// little endian helpers - reconstruct int from little endian bytes
-// little endian only matters when value uses more than one byte and only for multibyte integers
-/*
-e.g. FAT32 stores the 16 bit value 0x1234
-the bytes are in little endian i.e. 34 12
-p[0] = 34, p[1] = 12
-p[1] << 8 shifts the little endian byte to the front
-0000 0000 0001 0010 -> 0001 0010 0000 0000
-then we combine with bitwise XOR with both bytes
-*/
-static uint16_t read_le16(
-    const uint8_t* p
-) {
-    return (uint16_t)p[0] | (uint16_t)p[1] << 8;
-}
-
-static uint32_t read_le32(
-    const uint8_t* p
-) {
-    return (uint32_t)p[0]
-        | (uint32_t)p[1] << 8
-        | (uint32_t)p[2] << 16
-        | (uint32_t)p[3] << 24;
-}
+#include "Helper.h"
 
 /*
 sector offsets are based on: 
@@ -64,7 +43,7 @@ int fat32_parse_boot_sector(
     bootSector->BPB_TotalSec32 = read_le32(&sector[32]);
     
     // starting at offset 36, FAT32 will have different
-    // fields compared to FAT316/12.
+    // fields compared to FAT16/12.
 
     bootSector->BPB_FATSz32 = read_le32(&sector[36]); 
 
@@ -102,7 +81,7 @@ int fat32_parse_boot_sector(
 }
 
 int fat32_validate_boot_sector(
-    BootSector* bootSector
+    const BootSector* bootSector
 ) {
     if (bootSector == NULL) {
         return -1;
@@ -128,7 +107,8 @@ int fat32_validate_boot_sector(
     https://stackoverflow.com/questions/600293/how-to-check-if-a-number-is-a-power-of-2
     */
     if (bootSector->BPB_SecPerClus == 0 
-            || (bootSector->BPB_SecPerClus & (bootSector->BPB_SecPerClus - 1) != 0)) {
+            || ((bootSector->BPB_SecPerClus 
+                    & (bootSector->BPB_SecPerClus - 1)) != 0)) {
         return -1;
     }
 
@@ -164,31 +144,30 @@ int fat32_validate_boot_sector(
         return -1;
     }
 
-    
-
     return 0;
 }
 
-uint16_t fat32_get_offset(
-    BootSector* bootSector
+// returns where the whole FAT region begins
+uint32_t fat32_get_start_sector(
+    const BootSector* bootSector
 ) {
     return bootSector->BPB_ReservedSecCnt;
 }
 
-uint32_t fat32_get_size(
-    BootSector* bootSector
+uint32_t fat32_region_get_size(
+    const BootSector* bootSector
 ) {
     return bootSector->BPB_FATSz32 * bootSector->BPB_NumFATs;
 }
 
-uint16_t root_dir_get_offset(
-    BootSector* bootSector
+uint32_t root_dir_get_start_sector(
+    const BootSector* bootSector
 ) {
-    return (uint32_t)fat32_get_offset(bootSector) + fat32_get_size(bootSector);
+    return (uint32_t)fat32_get_start_sector(bootSector) + fat32_region_get_size(bootSector);
 }
 
 uint32_t root_dir_get_size(
-    BootSector* bootSector
+    const BootSector* bootSector
 ) {
     return (
         32 * bootSector->BPB_RootEntCnt
@@ -197,14 +176,14 @@ uint32_t root_dir_get_size(
         / bootSector->BPB_BytesPerSec;
 }
 
-uint32_t data_get_offset(
-    BootSector* bootSector
+uint32_t data_get_start_sector(
+    const BootSector* bootSector
 ) {
-    return root_dir_get_offset(bootSector) + root_dir_get_size(bootSector);
+    return root_dir_get_start_sector(bootSector) + root_dir_get_size(bootSector);
 }
 
 uint32_t data_get_size(
-    BootSector* bootSector
+    const BootSector* bootSector
 ) {
-    return bootSector->BPB_TotalSec32 - data_get_offset(bootSector);
+    return bootSector->BPB_TotalSec32 - data_get_start_sector(bootSector);
 }
